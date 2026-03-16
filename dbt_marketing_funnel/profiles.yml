@@ -1,0 +1,23 @@
+marketing_funnel:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth                      # Use `service-account` in CI/CD
+      project: project-1208edf9-ccf5-4444-8b4       # Replace with your GCP project
+      dataset: marketing_funnel_dev
+      threads: 4
+      timeout_seconds: 300
+      location: US
+      priority: interactive
+
+    prod:
+      type: bigquery
+      method: service-account
+      project: project-1208edf9-ccf5-4444-8b4
+      dataset: marketing_funnel_prod
+      keyfile: "{{ env_var('DBT_KEYFILE_PATH') }}"
+      threads: 8
+      timeout_seconds: 600
+      location: US
+      priority: batch

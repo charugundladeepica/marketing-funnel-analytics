@@ -1,0 +1,190 @@
+version: 2
+
+# -----------------------------------------------------------------------
+# Sources
+# -----------------------------------------------------------------------
+sources:
+  - name: ga4_public
+    description: >
+      Google Analytics 4 obfuscated sample ecommerce dataset.
+      Publicly available in BigQuery under:
+      bigquery-public-data.ga4_obfuscated_sample_ecommerce
+    database: bigquery-public-data
+    schema: ga4_obfuscated_sample_ecommerce
+    tables:
+      - name: events_*
+        description: >
+          Wildcard table covering all daily event shards.
+          Use _table_suffix to filter date ranges.
+        columns:
+          - name: event_timestamp
+            description: Event time in microseconds since epoch (UTC).
+          - name: event_name
+            description: >
+              Name of the GA4 event. Key funnel events:
+              session_start, page_view, view_item, add_to_cart,
+              begin_checkout, add_payment_info, purchase.
+          - name: user_pseudo_id
+            description: Obfuscated user identifier (cookie-based).
+          - name: event_params
+            description: Array of key-value pairs with event-level context.
+          - name: traffic_source
+            description: Struct with source, medium, and campaign name.
+          - name: ecommerce
+            description: Struct with transaction_id and revenue figures.
+
+
+# -----------------------------------------------------------------------
+# Staging models
+# -----------------------------------------------------------------------
+models:
+  - name: stg_ga4_events
+    description: >
+      Cleaned, typed, and flattened GA4 event rows.
+      One row per event. Nested event_params are extracted
+      into named columns. Surrogate keys added for both
+      event_id and session_id.
+    columns:
+      - name: event_id
+        description: Surrogate key — unique per event (user + session + timestamp).
+        tests:
+          - not_null
+      - name: session_id
+        description: Surrogate key — unique per session (user + ga_session_id).
+        tests:
+          - not_null
+      - name: event_name
+        description: GA4 event name.
+        tests:
+          - not_null
+      - name: event_timestamp
+        tests:
+          - not_null
+      - name: user_pseudo_id
+        tests:
+          - not_null
+      - name: traffic_medium
+        description: Attribution medium (e.g. organic, cpc, email).
+      - name: purchase_revenue
+        description: Revenue in local currency. Populated only for purchase events.
+
+
+  - name: stg_ga4_sessions
+    description: >
+      One row per GA4 session. Aggregates events to session grain.
+      Contains first-touch attribution, funnel step boolean flags,
+      session duration, and revenue.
+    columns:
+      - name: session_id
+        description: Surrogate key — unique per session.
+        tests:
+          - unique
+          - not_null
+      - name: user_pseudo_id
+        tests:
+          - not_null
+      - name: session_date
+        tests:
+          - not_null
+      - name: had_purchase
+        description: TRUE if the session resulted in a purchase event.
+        tests:
+          - not_null
+      - name: session_revenue
+        description: Total purchase revenue for the session. 0 for non-converting sessions.
+        tests:
+          - not_null
+
+
+# -----------------------------------------------------------------------
+# Mart models
+# -----------------------------------------------------------------------
+  - name: fct_funnel_steps
+    description: >
+      Core marketing funnel fact table. One row per session.
+
+      Each session is tagged with:
+        - The deepest funnel stage it reached (max_funnel_stage 1–7)
+        - Boolean flags for every stage visited
+        - Step-to-step progression flags
+        - First-touch channel attribution
+        - Revenue (for converting sessions)
+
+      Use this table for:
+        - Funnel drop-off analysis
+        - Conversion rate by channel, device, campaign
+        - Revenue attribution
+        - Cohort analysis
+
+      Join to fct_funnel_summary for pre-aggregated dashboard queries.
+    columns:
+      - name: session_id
+        description: Unique session identifier.
+        tests:
+          - unique
+          - not_null
+      - name: max_funnel_stage
+        description: Numeric depth reached (1=session start, 7=purchase).
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5, 6, 7]
+              quote: false
+      - name: deepest_stage_name
+        description: Human-readable name of the deepest funnel stage.
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - session_start
+                - page_view
+                - view_item
+                - add_to_cart
+                - begin_checkout
+                - add_payment_info
+                - purchase
+      - name: channel_group
+        description: Normalised channel (Paid Search, Email, Organic Search, etc.).
+        tests:
+          - not_null
+          - accepted_values:
+              values:
+                - Paid Search
+                - Paid Social
+                - Email
+                - Organic Search
+                - Referral
+                - Direct
+                - Organic Social
+                - Other
+      - name: is_converted
+        description: TRUE if session reached the purchase stage.
+        tests:
+          - not_null
+      - name: session_revenue
+        description: Purchase revenue. 0 for non-converting sessions.
+        tests:
+          - not_null
+
+
+  - name: fct_funnel_summary
+    description: >
+      Pre-aggregated funnel metrics by date, channel, device, and country.
+      Use this in Power BI and Streamlit for fast dashboard queries —
+      avoids scanning fct_funnel_steps on every visual refresh.
+
+      Contains step-to-step conversion rates, overall conversion rate,
+      total revenue, and avg order value.
+    columns:
+      - name: session_date
+        tests:
+          - not_null
+      - name: channel_group
+        tests:
+          - not_null
+      - name: total_sessions
+        description: Count of all sessions for this dimension combination.
+        tests:
+          - not_null
+      - name: overall_conversion_rate
+        description: sessions_with_purchase / total_sessions. Range 0–1.
