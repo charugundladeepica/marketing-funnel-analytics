@@ -1,0 +1,14 @@
+# Created by venv; see https://docs.python.org/3/library/venv.html
+venv/
+__pycache__/
+*.pyc
+dbt_marketing_funnel/target/
+dbt_marketing_funnel/logs/
+dbt_marketing_funnel/dbt_packages/
+dbt_marketing_funnel/.user.yml
+dbt_marketing_funnel/profiles.yml
+logs/
+*.zip
+.streamlit/secrets.toml
+streamlit_marketing_funnel/
+dbt_marketing_funnel.zip
