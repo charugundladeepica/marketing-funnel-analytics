@@ -60,34 +60,6 @@ stg_ga4_sessions   ← aggregate to session grain, first-touch attribution
 pip install dbt-bigquery
 ```
 
-### Setup
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/YOUR_USERNAME/marketing-funnel-dbt
-cd marketing-funnel-dbt
-
-# 2. Copy profiles.yml to ~/.dbt/ and fill in your GCP project ID
-cp profiles.yml ~/.dbt/profiles.yml
-# Edit ~/.dbt/profiles.yml — replace YOUR_GCP_PROJECT_ID
-
-# 3. Authenticate with GCP
-gcloud auth application-default login
-
-# 4. Install dbt packages
-dbt deps
-
-# 5. Run the full pipeline
-dbt run
-
-# 6. Run all tests
-dbt test
-
-# 7. Generate and serve docs
-dbt docs generate
-dbt docs serve
-```
-
 ### Date range
 
 By default, models process Nov 2020 – Jan 2021 (the available public dataset range).
